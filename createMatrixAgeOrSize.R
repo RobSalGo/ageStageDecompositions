@@ -10,11 +10,6 @@ rm(list=ls(all=TRUE))
 #Function to create a population matrix model
 
 
-discretize=c(5,10,15,20,25,50,max(c(d$Size,d$SizeNext),na.rm=T)+1)
-discretize=1:max(c(d$Age,d$AgeNext),na.rm=T)
-
-seedlingSizeThreshold=5
-
 makeMatrix <- function(d=d,discretize=c(1,2,3,4), variable="Size", seedlingSizeThreshold=NA){
 
 	if (variable == "Age" & !is.na(seedlingSizeThreshold)) {print("seedlingSizeThreshold reset to NA for age-based models")}
@@ -46,7 +41,7 @@ makeMatrix <- function(d=d,discretize=c(1,2,3,4), variable="Size", seedlingSizeT
 		#missingCatNext=which(!discretize %in% unique(d1$catNext))
 
 	#Frequency of transitions
-		matU = table(d1$catNext,d1$catNow)
+		matU = as.matrix(table(d1$catNext,d1$catNow))
 
 	#Making sure that all values of discretize are present in matU, even if not recorded transitions appear
 	#for (i in discretize){
@@ -65,8 +60,8 @@ makeMatrix <- function(d=d,discretize=c(1,2,3,4), variable="Size", seedlingSizeT
 	
 	#Dividing each stage by its specific survival value
 	surv = as.data.frame(colSums(table(d1$Surv,d1$catNow)))
-	for (i in as.numeric(rownames(surv))){matU[,i]=matU[,i]/surv[which(rownames(surv)==as.character(i)),]}
-	matU
+	if (variable=="Age") {for (i in as.numeric(rownames(surv))){matU[,i]=matU[,i]/surv[which(rownames(surv)==as.character(i)),]}}
+	if (variable=="Size") {matU=matU/surv[,1]}
 
 #Reproduction through anonymous motherhood
 	if (variable == "Size") {
@@ -87,15 +82,18 @@ makeMatrix <- function(d=d,discretize=c(1,2,3,4), variable="Size", seedlingSizeT
 	
 	#Total number of reproductive structures per capita in each stage
 	rep2=as.matrix(colSums(rep1[2:dim(rep1)[1],]))
+	#Proportion of reproductive effort per capita per stage
+	rep3=rep2/sum(rep2)
 	#Total of seedlings being produced per capita in each stage
-	rep3=recruitNumber/rep2
+	rep4=recruitNumber*rep3
 	#Creating 0 F matrix
-	matF=matrix(0,length(discretize),length(discretize))
-	colnames(matF)=colnames(matF)=discretize
-	
-	for (i in as.numeric(rownames(rep3))){
-		matF[1,i]=as.numeric(rep3[which(as.numeric(rownames(rep3))==i)])
-	}
+	matF=matrix(0,length(discretize)-1,length(discretize)-1)
+	colnames(matF)=colnames(matF)=discretize[-length(discretize)]
+
+	matF[1,]=rep4
+	#for (i in as.numeric(rownames(rep4))){
+	#	matF[1,i]=as.numeric(rep4[which(as.numeric(rownames(rep4))==i)])
+	#}
 
 	
 	#Making A matrix
@@ -107,28 +105,49 @@ makeMatrix <- function(d=d,discretize=c(1,2,3,4), variable="Size", seedlingSizeT
 
 
 #Read data
-setwd("~/Dropbox/Rostock IPM course Participants 2015/sharedDatasets/flavaDataPaper/cflavadata")
+setwd("~/Dropbox/ageStageDecompositions/")
 
-d <- read.table("Population_dynamics_data.csv", header=TRUE, sep=",", na.strings="NA", dec=".", strip.white=TRUE)
-d$SizeNext=NA
-d$AgeNext=NA
+data <- read.table("Population_dynamics_data.csv", header=TRUE, sep=",", na.strings="NA", dec=".", strip.white=TRUE)
+data$SizeNext=NA
+data$AgeNext=NA
 
 for (i in 1997:(2012-1)){
-	d$SizeNext[which(d$Year==i)]=d$Size[which(d$Year==i+1)]
-	d$AgeNext[which(d$Year==i)]=d$Age[which(d$Year==i+1)]
+	data$SizeNext[which(data$Year==i)]=data$Size[which(data$Year==i+1)]
+	data$AgeNext[which(data$Year==i)]=data$Age[which(data$Year==i+1)]
 }
 
-d$Age[which(d$Age==999)]=NA
-d$AgeNext[which(d$AgeNext==999)]=NA
+data$Age[which(d$Age==999)]=NA
+data$AgeNext[which(d$AgeNext==999)]=NA
 
-d$Surv=NA
-d$Surv[which(is.na(d$Size))]=NA
-d$Surv[which(!is.na(d$Size) & is.na(d$SizeNext))]=0
-d$Surv[which(!is.na(d$Size) & !is.na(d$SizeNext))]=1
+data$Surv=NA
+data$Surv[which(is.na(data$Size))]=NA
+data$Surv[which(!is.na(data$Size) & is.na(data$SizeNext))]=0
+data$Surv[which(!is.na(data$Size) & !is.na(data$SizeNext))]=1
 
 
-d$ID[which(d$Age>d$AgeNext)]
+data$ID[which(data$Age>data$AgeNext)]
 
-plot(d$Age,d$AgeNext)
-plot(d$Size,d$SizeNext)
+plot(data$Age,data$AgeNext)
+plot(data$Size,data$SizeNext)
+
+
+#Choosing to discretize the data by size or age:
+	#By size:
+		discretize=c(2,5,10,15,20,25,50,max(c(data$Size,data$SizeNext),na.rm=T)+1)
+		seedlingSizeThreshold=5
+	#By age
+		discretize=1:max(c(data$Age,data$AgeNext),na.rm=T)
+		seedlingSizeThreshold=NA
+
+	#Take subsets by treament level:
+		d=data
+		d=data[which(data$Treatment=="C"),]		#For Control
+		d=data[which(data$Treatment=="D1"),]	#For Drought in 1998
+		d=data[which(data$Treatment=="D2"),]	#For Drought in 1999
+
+
+
+
+
+
 
